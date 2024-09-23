@@ -1,0 +1,12 @@
+name: RQCee
+title: RQCee
+username: sunshine
+account: sunshine
+server: posit.lsi.nus.edu.sg:3443
+hostUrl: https://posit.lsi.nus.edu.sg:3443/__api__
+appId: 3
+bundleId: 11
+url: https://posit.lsi.nus.edu.sg:3443/content/ce4d8340-9f5d-4e6c-a7eb-ada5e607054a/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

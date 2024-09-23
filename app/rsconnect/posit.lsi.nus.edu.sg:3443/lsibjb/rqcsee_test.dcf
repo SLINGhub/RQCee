@@ -1,0 +1,13 @@
+name: RQCee_test
+title: RQCee_Test
+username: lsibjb
+account: lsibjb
+server: posit.lsi.nus.edu.sg:3443
+hostUrl: https://posit.lsi.nus.edu.sg:3443/__api__
+appId: 4
+bundleId: 13
+url: https://posit.lsi.nus.edu.sg:3443/content/3b0f97a6-af84-4152-86ed-1f6e963c3097/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: shiny.pdf
