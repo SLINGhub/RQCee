@@ -87,8 +87,5 @@ ui <- page_sidebar(
           column(2, actionButton("get_stats", "Retrieve statistics")),
           tableOutput("stats_table")
         )
-
-
-
   )
 )
