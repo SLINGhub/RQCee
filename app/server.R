@@ -121,6 +121,14 @@ server <- function(input, output, session) {
   }
   #finish the function of add metadata for pdf and excel output ####
 
+  # Function to format numeric columns to 3 digits
+  format_numeric <- function(x) {
+    if(is.numeric(x)) {
+      return(round(x, 3))
+    } else {
+      return(x)
+    }
+  }
 
   # Function to generate the plot and save it to a temporary file
   generate_plots <- function(as_pdf = TRUE, return_plots = TRUE) {
@@ -182,7 +190,9 @@ server <- function(input, output, session) {
       if (!is.null(mexp_local)) {
       table_result <- midar::get_response_curve_stats(data = mexp_local,
                                                       with_staturation_stats = FALSE,
-                                                      limit_to_rqc = FALSE)
+                                                      limit_to_rqc = FALSE) |>
+        mutate(across(where(is.numeric), format_numeric))
+
       # rv$stats_table <- table_result
       write_xlsx(table_result, file)
 
@@ -223,7 +233,8 @@ server <- function(input, output, session) {
     if (!is.null(mexp_local)) {
       table_result <- midar::get_response_curve_stats(data = mexp_local,
                                                       with_staturation_stats = FALSE,
-                                                      limit_to_rqc = FALSE)
+                                                      limit_to_rqc = FALSE) |>
+        mutate(across(where(is.numeric), format_numeric))
       rv$stats_table <- table_result
     }
     #shinyjs::hide("popup")
