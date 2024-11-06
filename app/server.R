@@ -3,7 +3,6 @@ options(shiny.maxRequestSize = 50 * 1024^2)  # Increase file upload size limit
 #shiny::runGitHub("SLINGhub/RQCee", subdir = "app")
 library(shiny)
 library(rhandsontable)
-library(writexl)
 library(ggplot2)
 library(midar)
 library(tidyverse)
@@ -11,6 +10,7 @@ library(dplyr)
 library(stringr)
 library(shinyjs)
 library(shinyWidgets)
+library(openxlsx2)
 
 server <- function(input, output, session) {
 
@@ -24,7 +24,7 @@ server <- function(input, output, session) {
 
     req(input$datafile_path)
 
-    # Get the file extension
+    # Get the file extension----
     file_ext <- tools::file_ext(input$datafile_path$name)
 
     # Check if the file extension matches the selected data type
@@ -48,9 +48,9 @@ server <- function(input, output, session) {
       mexp_temp <- MidarExperiment()
 
       if (input$data_type == "mh_quant") {
-        mexp_temp <- midar::rawdata_import_agilent(mexp_temp, path = input$datafile_path$datapath, file_format = "csv", use_metadata = TRUE)
+        mexp_temp <- midar::data_import_masshunter(mexp_temp, path = input$datafile_path$datapath, file_format = "csv", use_metadata = TRUE)
       } else if (input$data_type == "mrmkit") {
-         mexp_temp <- midar::rawdata_import_mrmkit(mexp_temp, path = input$datafile_path$datapath, use_metadata = TRUE)
+         mexp_temp <- midar::data_import_mrmkit(mexp_temp, path = input$datafile_path$datapath, use_metadata = TRUE)
       }
 
       #todo: add acquisition_time_stamp and inj_volume
@@ -58,8 +58,9 @@ server <- function(input, output, session) {
         select(analysis_id, any_of("sample_name")) |>
         distinct(analysis_id, .keep_all = FALSE) |>
         mutate(is_selected = FALSE,
-               rqc_series_id = NA_character_,
-               relative_sample_amount = NA_real_)
+               curve_id = NA_character_,
+               analyzed_amount = NA_real_,
+               analyzed_amount_unit = NA_character_)
       rv$mexp <- mexp_temp
       rv$tbl_samples <- tbl
     }
@@ -96,7 +97,7 @@ server <- function(input, output, session) {
       mutate(is_selected = FALSE)
   })
 
-  #add metadata for pdf and excel output ####
+  #add metadata for pdf and excel output ----
   add_metadata <- function() {
     mexp_local <- isolate(rv$mexp)
     annot <- isolate(rv$tbl_samples) |>  filter(is_selected)
@@ -112,8 +113,7 @@ server <- function(input, output, session) {
       return(NULL)
     } else {
       annot <- annot |>
-      rename(analysis_id = analysis_id) |>
-      mutate(relative_sample_amount = relative_sample_amount / 100)
+       rename(analysis_id = analysis_id)
 
       metadata_responsecurves(mexp_local) <- as_tibble(annot)
       mexp_local
@@ -131,25 +131,27 @@ server <- function(input, output, session) {
   }
 
   # Function to generate the plot and save it to a temporary file
-  generate_plots <- function(as_pdf = TRUE, return_plots = TRUE) {
+  generate_plots <- function(as_pdf = TRUE, return_plots = FALSE) {
     temp_file <- tempfile(fileext = ".pdf")
 
-    print("generate_plots")
     mexp_local <- add_metadata()
 
     if (is.null(mexp_local)) return(NULL)
 
-    plts <- plot_responsecurves(data = mexp_local,
+    plts <- qc_plot_responsecurves(data = mexp_local,
                         return_plot_list = return_plots,
-                        use_filt_data = FALSE,
-                        columns_page = input$n_cols,
-                        rows_page = input$n_rows,point_size = 4, line_width = 1.6, text_scale_factor = 2,  base_size = 10,
-                        output_pdf = as_pdf,
-                        path = temp_file)
+                        filter_data = FALSE,
+                        cols_page = input$n_cols, rows_page = input$n_rows,
+                        point_size = 4, line_width = 1.6,
+                        scale_factor = 1, font_base_size = 5,
+                        save_pdf = as_pdf,
+                        path = temp_file )
 
-    #print(str(plts$plt))
-    plts$plt
-    # browser()
+    if(return_plots)
+      plts
+    else
+      temp_file
+
   }
 
   output$download_pdf <- downloadHandler(
@@ -162,12 +164,9 @@ server <- function(input, output, session) {
       shinyjs::show("popup")
 
       # Generate the plot and save to a temporary file
-      plot_file <- generate_plots(as_pdf = TRUE, return_plots = TRUE)
+      plot_file <- generate_plots(as_pdf = TRUE, return_plots = FALSE)
 
-      #Copy the plot to the final location
-      if (!is.null(plot_file)) {
-        file.copy(plot_file, file, overwrite = TRUE)
-      }
+      file.copy(plot_file, file, overwrite = TRUE)
 
       # Hide spinner
       shinyjs::hide("popup")
@@ -188,13 +187,59 @@ server <- function(input, output, session) {
 
       # Write the table to an Excel file
       if (!is.null(mexp_local)) {
-      table_result <- midar::get_response_curve_stats(data = mexp_local,
+      ResponseCurve <- midar::get_response_curve_stats(data = mexp_local,
                                                       with_staturation_stats = FALSE,
                                                       limit_to_rqc = FALSE) |>
         mutate(across(where(is.numeric), format_numeric))
 
-      # rv$stats_table <- table_result
-      write_xlsx(table_result, file)
+      #add the color style to the excel table
+      wb <- wb_workbook()
+      wb$add_dxfs_style(name = "redStyle", font_color = wb_color(hex = "#330000"), bg_fill = wb_color(hex = "#FF0000"))
+      wb$add_dxfs_style(name = "brownStyle", font_color = wb_color(hex = "#330000"), bg_fill = wb_color(hex = "#FF9C00"))
+
+
+      wb$add_worksheet("ResponseCurve")
+      wb$add_data("ResponseCurve", ResponseCurve)
+
+      n_rows <- nrow(mexp_local@annot_features)+1
+
+      wb$add_conditional_formatting(
+        "ResponseCurve",
+        dims = paste0("B2:C", n_rows),
+        rule = "<0.8",
+        style = "brownStyle"
+      )
+      wb$add_conditional_formatting(
+        "ResponseCurve",
+        dims = paste0("B2:C", n_rows),
+        rule = "<0.7",
+        style = "redStyle"
+      )
+      wb$add_conditional_formatting(
+        "ResponseCurve",
+        dims = paste0("D2:E", n_rows),
+        rule = "<0.75",
+        style = "brownStyle"
+      )
+      wb$add_conditional_formatting(
+        "ResponseCurve",
+        dims = paste0("F2:G", n_rows),
+        rule = ">0.5",
+        style = "brownStyle"
+      )
+
+      #add a sheet with the peak area of the samples
+      dataset_wide <- mexp_local@dataset_orig |>
+        select(raw_data_filename, acquisition_time_stamp, feature_id, feature_area) |>
+        pivot_wider(values_from = feature_area, names_from = feature_id) |>
+        arrange(acquisition_time_stamp)
+
+      wb$add_worksheet("Data")
+      wb$add_data("Data", dataset_wide)
+
+      wb_save(wb, file)
+
+      # write_xlsx(ResponseCurve, file)
 
       }
 
@@ -232,9 +277,10 @@ server <- function(input, output, session) {
     # Write the table to an Excel file
     if (!is.null(mexp_local)) {
       table_result <- midar::get_response_curve_stats(data = mexp_local,
-                                                      with_staturation_stats = FALSE,
-                                                      limit_to_rqc = FALSE) |>
+                                        with_staturation_stats = FALSE,
+                                        limit_to_rqc = FALSE) |>
         mutate(across(where(is.numeric), format_numeric))
+
       rv$stats_table <- table_result
     }
     #shinyjs::hide("popup")
