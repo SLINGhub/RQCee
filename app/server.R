@@ -79,15 +79,17 @@ server <- function(input, output, session) {
 
   # Initialize and render the editable rhandsontable
   output$table <- renderRHandsontable({
-   rhandsontable(
-     rv$tbl_samples,
-     width = 1000,
-     height = 600,
-     useTypes = FALSE  # Disable strict type checking for better performance
-     ) |>
-      hot_cols(columnSorting = TRUE, manualColumnMove = TRUE, manualColumnResize = TRUE)  |>
-      hot_table(stretchH = "all")  # Adjust column width dynamically
-     })
+    if (nrow(rv$tbl_samples) > 0) {
+      rhandsontable(
+        rv$tbl_samples,
+        width = 1000,
+        height = 600,
+        useTypes = FALSE  # Disable strict type checking for better performance
+      ) %>%
+        hot_cols(columnSorting = TRUE, manualColumnMove = TRUE, manualColumnResize = TRUE) %>%
+        hot_table(stretchH = "all")  # Adjust column width dynamically
+    }
+  })
 
   # Capture the table edited by the user
   observeEvent(input$table, {
