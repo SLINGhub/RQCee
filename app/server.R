@@ -11,6 +11,8 @@ library(stringr)
 library(shinyjs)
 library(shinyWidgets)
 library(openxlsx2)
+library(DT)
+
 
 server <- function(input, output, session) {
 
@@ -18,7 +20,16 @@ server <- function(input, output, session) {
                        tbl_samples = tibble(),
                        show_filtered = FALSE,
                        plots = NULL,
-                       stats_table = tibble())
+                       stats_table = tibble(
+                        feature_id = character(0),
+                        r2_rqc_1 = numeric(0),
+                        r2_rqc_2 = numeric(0),
+                        slopenorm_rqc_1 = numeric(0),
+                        slopenorm_rqc_2 = numeric(0),
+                        y0norm_rqc_1 = numeric(0),
+                        y0norm_rqc_2 = numeric(0)
+                      )
+                    )
 
   observeEvent(input$datafile_path, {
 
@@ -68,8 +79,14 @@ server <- function(input, output, session) {
 
   # Initialize and render the editable rhandsontable
   output$table <- renderRHandsontable({
-   rhandsontable(rv$tbl_samples, width = 1000, height = 600) %>%
-      hot_cols(columnSorting = TRUE, manualColumnMove = TRUE, manualColumnResize = TRUE)
+   rhandsontable(
+     rv$tbl_samples,
+     width = 1000,
+     height = 600,
+     useTypes = FALSE  # Disable strict type checking for better performance
+     ) |>
+      hot_cols(columnSorting = TRUE, manualColumnMove = TRUE, manualColumnResize = TRUE)  |>
+      hot_table(stretchH = "all")  # Adjust column width dynamically
      })
 
   # Capture the table edited by the user
@@ -142,8 +159,8 @@ server <- function(input, output, session) {
                         return_plot_list = return_plots,
                         filter_data = FALSE,
                         cols_page = input$n_cols, rows_page = input$n_rows,
-                        point_size = 4, line_width = 1.6,
-                        scale_factor = 1, font_base_size = 5,
+                        point_size = 2, line_width = 1.2,
+                        scale_factor = 1, font_base_size = 6,
                         save_pdf = as_pdf,
                         path = temp_file )
 
@@ -188,42 +205,90 @@ server <- function(input, output, session) {
       # Write the table to an Excel file
       if (!is.null(mexp_local)) {
       ResponseCurve <- midar::get_response_curve_stats(data = mexp_local,
-                                                      with_staturation_stats = FALSE,
-                                                      limit_to_rqc = FALSE) |>
-        mutate(across(where(is.numeric), format_numeric))
+                            with_staturation_stats = FALSE,
+                            limit_to_rqc = FALSE) |>
+                              mutate(across(where(is.numeric), format_numeric))
+
+      # Define expected columns
+      expected_columns <- c(
+        "feature_id",
+        "r2_rqc_1", "slopenorm_rqc_1", "y0norm_rqc_1",
+        "r2_rqc_2", "slopenorm_rqc_2", "y0norm_rqc_2"
+      )
+
+      # Add missing columns with default values
+      for (col in expected_columns) {
+        if (!col %in% names(ResponseCurve)) {
+          ResponseCurve[[col]] <- NA
+        }
+      }
+
+      # Ensure column order matches the expected structure
+      ResponseCurve <- ResponseCurve[, expected_columns, drop = FALSE]
+
+      # Set a global placeholder for NAs
+      options(openxlsx2.na.strings = "")
 
       #add the color style to the excel table
       wb <- wb_workbook()
-      wb$add_dxfs_style(name = "redStyle", font_color = wb_color(hex = "#330000"), bg_fill = wb_color(hex = "#FF0000"))
-      wb$add_dxfs_style(name = "brownStyle", font_color = wb_color(hex = "#330000"), bg_fill = wb_color(hex = "#FF9C00"))
-
+      wb$add_dxfs_style(name = "redStyle", font_color = wb_color(hex = "grey0"), bg_fill = wb_color(hex = "pink"))
+      wb$add_dxfs_style(name = "brownStyle", font_color = wb_color(hex = "grey0"), bg_fill = wb_color(hex = "#F0E2C4"))
 
       wb$add_worksheet("ResponseCurve")
       wb$add_data("ResponseCurve", ResponseCurve)
 
+
       n_rows <- nrow(mexp_local@annot_features)+1
 
       wb$add_conditional_formatting(
-        "ResponseCurve",
-        dims = paste0("B2:C", n_rows),
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 2 ),
         rule = "<0.8",
         style = "brownStyle"
       )
       wb$add_conditional_formatting(
-        "ResponseCurve",
-        dims = paste0("B2:C", n_rows),
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 5 ),
+        rule = "<0.8",
+        style = "brownStyle"
+      )
+
+
+      wb$add_conditional_formatting(
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 2 ),
         rule = "<0.7",
         style = "redStyle"
       )
       wb$add_conditional_formatting(
-        "ResponseCurve",
-        dims = paste0("D2:E", n_rows),
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 5 ),
+        rule = "<0.7",
+        style = "redStyle"
+      )
+
+      wb$add_conditional_formatting(
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 3 ),
         rule = "<0.75",
         style = "brownStyle"
       )
       wb$add_conditional_formatting(
-        "ResponseCurve",
-        dims = paste0("F2:G", n_rows),
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 6 ),
+        rule = "<0.75",
+        style = "brownStyle"
+      )
+
+      wb$add_conditional_formatting(
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 4 ),
+        rule = ">0.5",
+        style = "brownStyle"
+      )
+      wb$add_conditional_formatting(
+        sheet = "ResponseCurve",
+        dims = wb_dims( rows = 2:n_rows, cols = 7 ),
         rule = ">0.5",
         style = "brownStyle"
       )
@@ -234,13 +299,12 @@ server <- function(input, output, session) {
         pivot_wider(values_from = feature_area, names_from = feature_id) |>
         arrange(acquisition_time_stamp)
 
+
+      # Add a worksheet
       wb$add_worksheet("Data")
       wb$add_data("Data", dataset_wide)
 
       wb_save(wb, file)
-
-      # write_xlsx(ResponseCurve, file)
-
       }
 
       # Hide spinner
@@ -250,43 +314,85 @@ server <- function(input, output, session) {
 
   output$plot_rqc <- renderPlot({
     req(rv$plots)
-    print("plot_curves")
     print(rv$plots[[as.numeric(input$select_page)]])
 
   })
 
-  output$stats_table <- renderTable({
-    req(rv$stats_table)
-    rv$stats_table
+  observeEvent(input$get_stats, {
+  shinyjs::show("popup")
 
+  mexp_local <- add_metadata()
+
+  if (!is.null(mexp_local)) {
+    # Retrieve stats table and dynamically adjust for missing columns
+    table_result <- midar::get_response_curve_stats(data = mexp_local,
+                                                    with_staturation_stats = FALSE,
+                                                    limit_to_rqc = FALSE) |>
+      mutate(across(where(is.numeric), format_numeric))
+
+    # Define expected columns
+    expected_columns <- c(
+        "feature_id",
+        "r2_rqc_1", "slopenorm_rqc_1", "y0norm_rqc_1",
+        "r2_rqc_2", "slopenorm_rqc_2", "y0norm_rqc_2"
+      )
+
+    # Add missing columns with default values
+    for (col in expected_columns) {
+      if (!col %in% names(table_result)) {
+        table_result[[col]] <- NA
+      }
+    }
+
+    # Ensure column order matches the expected structure
+    rv$stats_table <- table_result[, expected_columns, drop = FALSE]
+  }
+
+    shinyjs::hide("popup")
   })
 
+
+  output$stats_table <- renderDT({
+    req(rv$stats_table)
+
+      if (nrow(rv$stats_table) == 0) {
+        # Show an empty table with a message
+        datatable(
+          tibble(message = "No data available. Please click 'Retrieve statistics' to generate the data."),
+          options = list(dom = "t", paging = FALSE),
+          rownames = FALSE
+      )
+    } else {
+        datatable(rv$stats_table,
+                  options = list(
+                    pageLength = 10,
+                    autoWidth = TRUE,
+                    columnDefs = list(
+                      list(className = 'dt-center', targets = "_all")
+                    )
+                  ),
+                  escape = FALSE) |>
+          formatStyle(
+            columns = c("r2_rqc_1", "r2_rqc_2"),
+            backgroundColor = styleInterval(c(0.7, 0.8), c("pink", "#F0E2C4", "white"))
+          ) |>
+          formatStyle(
+            columns = c("slopenorm_rqc_1", "slopenorm_rqc_2"),
+            backgroundColor = styleInterval(0.75, c("#F0E2C4", "white"))
+          ) |>
+          formatStyle(
+            columns = c("y0norm_rqc_1", "y0norm_rqc_2"),
+            backgroundColor = styleInterval(0.5, c("white", "#F0E2C4"))
+          )
+    }
+  })
+
+
   observeEvent(input$get_plots, {
-    print("generate_plots")
     shinyjs::show("popup")
     plts <- generate_plots(as_pdf = TRUE, return_plots = TRUE)
     rv$plots <- plts
     shinyjs::hide("popup")
   })
 
-  observeEvent(input$get_stats, {
-    print("get_stats")
-
-    mexp_local <- add_metadata()
-
-    # Write the table to an Excel file
-    if (!is.null(mexp_local)) {
-      table_result <- midar::get_response_curve_stats(data = mexp_local,
-                                        with_staturation_stats = FALSE,
-                                        limit_to_rqc = FALSE) |>
-        mutate(across(where(is.numeric), format_numeric))
-
-      rv$stats_table <- table_result
-    }
-    #shinyjs::hide("popup")
-  })
-
 }
-
-
-
