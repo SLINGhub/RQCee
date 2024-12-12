@@ -19,16 +19,8 @@ server <- function(input, output, session) {
     rv <- reactiveValues(mexp = MidarExperiment(),
                        tbl_samples = tibble(),
                        show_filtered = FALSE,
-                       plots = NULL,
-                       stats_table = tibble(
-                        feature_id = character(0),
-                        r2_rqc_1 = numeric(0),
-                        r2_rqc_2 = numeric(0),
-                        slopenorm_rqc_1 = numeric(0),
-                        slopenorm_rqc_2 = numeric(0),
-                        y0norm_rqc_1 = numeric(0),
-                        y0norm_rqc_2 = numeric(0)
-                      )
+                       plots = list(),
+                       stats_table = tibble()
                     )
 
   observeEvent(input$datafile_path, {
@@ -59,9 +51,9 @@ server <- function(input, output, session) {
       mexp_temp <- MidarExperiment()
 
       if (input$data_type == "mh_quant") {
-        mexp_temp <- midar::data_import_masshunter(mexp_temp, path = input$datafile_path$datapath, file_format = "csv", use_metadata = TRUE)
+        mexp_temp <- midar::import_data_masshunter(mexp_temp, path = input$datafile_path$datapath, import_metadata = TRUE)
       } else if (input$data_type == "mrmkit") {
-         mexp_temp <- midar::data_import_mrmkit(mexp_temp, path = input$datafile_path$datapath, use_metadata = TRUE)
+         mexp_temp <- midar::import_data_mrmkit(mexp_temp, path = input$datafile_path$datapath, import_metadata = TRUE)
       }
 
       #todo: add acquisition_time_stamp and inj_volume
@@ -157,13 +149,14 @@ server <- function(input, output, session) {
 
     if (is.null(mexp_local)) return(NULL)
 
-    plts <- qc_plot_responsecurves(data = mexp_local,
-                        return_plot_list = return_plots,
+    plts <- midar::plot_responsecurves(data = mexp_local,
+                        return_plots = return_plots,
+                        variable = "intensity",
                         filter_data = FALSE,
                         cols_page = input$n_cols, rows_page = input$n_rows,
                         point_size = 2, line_width = 1.2,
-                        scale_factor = 1, font_base_size = 6,
-                        save_pdf = as_pdf,
+                        scaling_factor = 1, font_base_size = 6,
+                        output_pdf = as_pdf,
                         path = temp_file )
 
     if(return_plots)
@@ -211,23 +204,6 @@ server <- function(input, output, session) {
                             limit_to_rqc = FALSE) |>
                               mutate(across(where(is.numeric), format_numeric))
 
-      # Define expected columns
-      expected_columns <- c(
-        "feature_id",
-        "r2_rqc_1", "slopenorm_rqc_1", "y0norm_rqc_1",
-        "r2_rqc_2", "slopenorm_rqc_2", "y0norm_rqc_2"
-      )
-
-      # Add missing columns with default values
-      for (col in expected_columns) {
-        if (!col %in% names(ResponseCurve)) {
-          ResponseCurve[[col]] <- NA
-        }
-      }
-
-      # Ensure column order matches the expected structure
-      ResponseCurve <- ResponseCurve[, expected_columns, drop = FALSE]
-
       # Set a global placeholder for NAs
       options(openxlsx2.na.strings = "")
 
@@ -239,61 +215,32 @@ server <- function(input, output, session) {
       wb$add_worksheet("ResponseCurve")
       wb$add_data("ResponseCurve", ResponseCurve)
 
+      add_condi_format <- function(wb, n_rows, columns, rule_wb, style_wb) {
+        wb$add_conditional_formatting(
+          sheet = "ResponseCurve",
+          dims = wb_dims( rows = 2:n_rows, cols = columns ),
+          rule = rule_wb,
+          style = style_wb
+        )
+      }
 
       n_rows <- nrow(mexp_local@annot_features)+1
+      cols_r2 <- which(grepl("r2_rqc_", names(ResponseCurve)))
+      cols_slopenorm <- which(grepl("slopenorm_rqc_", names(ResponseCurve)))
+      cols_y0norm <- which(grepl("y0norm_rqc_", names(ResponseCurve)))
 
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 2 ),
-        rule = "<0.8",
-        style = "brownStyle"
-      )
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 5 ),
-        rule = "<0.8",
-        style = "brownStyle"
-      )
+      for(i in cols_r2) {
+      add_condi_format(wb = wb, n_rows = n_rows, columns = i, rule_wb = "<0.8", style_wb = "brownStyle")
+      add_condi_format(wb = wb, n_rows = n_rows, columns = i, rule_wb = "<0.7", style_wb = "redStyle")
+      }
 
+      for(j in cols_slopenorm) {
+      add_condi_format(wb = wb, n_rows = n_rows, columns = j, rule_wb = "<0.75", style_wb = "brownStyle")
+      }
 
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 2 ),
-        rule = "<0.7",
-        style = "redStyle"
-      )
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 5 ),
-        rule = "<0.7",
-        style = "redStyle"
-      )
-
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 3 ),
-        rule = "<0.75",
-        style = "brownStyle"
-      )
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 6 ),
-        rule = "<0.75",
-        style = "brownStyle"
-      )
-
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 4 ),
-        rule = ">0.5",
-        style = "brownStyle"
-      )
-      wb$add_conditional_formatting(
-        sheet = "ResponseCurve",
-        dims = wb_dims( rows = 2:n_rows, cols = 7 ),
-        rule = ">0.5",
-        style = "brownStyle"
-      )
+      for(k in cols_y0norm) {
+      add_condi_format(wb = wb, n_rows = n_rows, columns = k, rule_wb = ">0.5", style_wb = "brownStyle")
+      }
 
       #add a sheet with the peak area of the samples
       dataset_wide <- mexp_local@dataset_orig |>
@@ -315,8 +262,15 @@ server <- function(input, output, session) {
   )
 
   output$plot_rqc <- renderPlot({
-    req(rv$plots)
-    print(rv$plots[[as.numeric(input$select_page)]])
+    req(length(rv$plots) > 0)
+
+    selected_page <- as.numeric(input$select_page)
+    if (selected_page <= length(rv$plots)) {
+      print(rv$plots[[selected_page]])
+    } else {
+      plot.new()  # Display an empty plot if the page is out of range
+      text(0.5, 0.5, "No plot available for this page.", cex = 1.5)
+    }
 
   })
 
@@ -332,22 +286,7 @@ server <- function(input, output, session) {
                                                     limit_to_rqc = FALSE) |>
       mutate(across(where(is.numeric), format_numeric))
 
-    # Define expected columns
-    expected_columns <- c(
-        "feature_id",
-        "r2_rqc_1", "slopenorm_rqc_1", "y0norm_rqc_1",
-        "r2_rqc_2", "slopenorm_rqc_2", "y0norm_rqc_2"
-      )
-
-    # Add missing columns with default values
-    for (col in expected_columns) {
-      if (!col %in% names(table_result)) {
-        table_result[[col]] <- NA
-      }
-    }
-
-    # Ensure column order matches the expected structure
-    rv$stats_table <- table_result[, expected_columns, drop = FALSE]
+    rv$stats_table <- table_result
   }
 
     shinyjs::hide("popup")
@@ -357,35 +296,44 @@ server <- function(input, output, session) {
   output$stats_table <- renderDT({
     req(rv$stats_table)
 
-      if (nrow(rv$stats_table) == 0) {
-        # Show an empty table with a message
-        datatable(
-          tibble(message = "No data available. Please click 'Retrieve statistics' to generate the data."),
-          options = list(dom = "t", paging = FALSE),
-          rownames = FALSE
+    if (nrow(rv$stats_table) == 0) {
+      # Show an empty table with a message
+      datatable(
+        tibble(message = "No data available. Please click 'Retrieve statistics' to generate the data."),
+        options = list(dom = "t", paging = FALSE),
+        rownames = FALSE
       )
     } else {
-        datatable(rv$stats_table,
-                  options = list(
-                    pageLength = 10,
-                    autoWidth = TRUE,
-                    columnDefs = list(
-                      list(className = 'dt-center', targets = "_all")
-                    )
-                  ),
-                  escape = FALSE) |>
-          formatStyle(
-            columns = c("r2_rqc_1", "r2_rqc_2"),
-            backgroundColor = styleInterval(c(0.7, 0.8), c("pink", "#F0E2C4", "white"))
-          ) |>
-          formatStyle(
-            columns = c("slopenorm_rqc_1", "slopenorm_rqc_2"),
-            backgroundColor = styleInterval(0.75, c("#F0E2C4", "white"))
-          ) |>
-          formatStyle(
-            columns = c("y0norm_rqc_1", "y0norm_rqc_2"),
-            backgroundColor = styleInterval(0.5, c("white", "#F0E2C4"))
-          )
+      # Identify columns dynamically
+      r2_cols <- grep("^r2_rqc_", names(rv$stats_table), value = TRUE)
+      slopenorm_cols <- grep("^slopenorm_rqc_", names(rv$stats_table), value = TRUE)
+      y0norm_cols <- grep("^y0norm_rqc_", names(rv$stats_table), value = TRUE)
+
+      # Create the datatable
+      datatable(rv$stats_table,
+                options = list(
+                  pageLength = 10,
+                  autoWidth = TRUE,
+                  columnDefs = list(
+                    list(className = 'dt-center', targets = "_all")
+                  )
+                ),
+                escape = FALSE) |>
+        # Format `r2_rqc_` columns
+        formatStyle(
+          columns = r2_cols,
+          backgroundColor = styleInterval(c(0.7, 0.8), c("pink", "#F0E2C4", "white"))
+        ) |>
+        # Format `slopenorm_rqc_` columns
+        formatStyle(
+          columns = slopenorm_cols,
+          backgroundColor = styleInterval(0.75, c("#F0E2C4", "white"))
+        ) |>
+        # Format `y0norm_rqc_` columns
+        formatStyle(
+          columns = y0norm_cols,
+          backgroundColor = styleInterval(0.5, c("white", "#F0E2C4"))
+        )
     }
   })
 
