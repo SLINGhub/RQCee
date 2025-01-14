@@ -80,9 +80,7 @@ ui <- page_sidebar(
       fluidRow(
         column(2, actionButton("get_plots", "Retrieve plots")),
         column(2, "Show Page"),
-        column(3, selectInput("select_page",
-                    NULL,
-                    choices = 1:15))
+        column(3, selectInput("select_page", NULL, choices = NULL))  # Initialize with NULL
         ),
       plotOutput("plot_rqc", width = "100%")
     ),

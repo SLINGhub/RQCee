@@ -16,12 +16,12 @@ library(DT)
 
 server <- function(input, output, session) {
 
-    rv <- reactiveValues(mexp = MidarExperiment(),
-                       tbl_samples = tibble(),
-                       show_filtered = FALSE,
-                       plots = list(),
-                       stats_table = tibble()
-                    )
+  rv <- reactiveValues(mexp = MidarExperiment(),
+                     tbl_samples = tibble(),
+                     show_filtered = FALSE,
+                     plots = list(),
+                     stats_table = tibble()
+                  )
 
   observeEvent(input$datafile_path, {
 
@@ -261,6 +261,14 @@ server <- function(input, output, session) {
     }
   )
 
+
+  observe({
+    if (!is.null(rv$plots)) {
+      updateSelectInput(session, "select_page", choices = 1:length(rv$plots))
+    }
+  })
+
+
   output$plot_rqc <- renderPlot({
     req(length(rv$plots) > 0)
 
@@ -272,7 +280,8 @@ server <- function(input, output, session) {
       text(0.5, 0.5, "No plot available for this page.", cex = 1.5)
     }
 
-  })
+  },
+  width = 900, height = 600, res = 96)
 
   observeEvent(input$get_stats, {
   shinyjs::show("popup")
@@ -336,7 +345,6 @@ server <- function(input, output, session) {
         )
     }
   })
-
 
   observeEvent(input$get_plots, {
     shinyjs::show("popup")
