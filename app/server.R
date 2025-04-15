@@ -1,5 +1,4 @@
 options(shiny.maxRequestSize = 50 * 1024^2)  # Increase file upload size limit
-#remotes::install_github("SLINGhub/midar@development")
 #shiny::runGitHub("SLINGhub/RQCee", subdir = "app")
 library(shiny)
 library(rhandsontable)
@@ -126,7 +125,9 @@ server <- function(input, output, session) {
       annot <- annot |>
        rename(analysis_id = analysis_id)
 
-      metadata_responsecurves(mexp_local) <- as_tibble(annot)
+      mexp_local <- import_metadata_responsecurves(data = mexp_local, table = as_tibble(annot))
+      mexp_local@dataset <- mexp_local@dataset |>
+        mutate(qc_type = if_else(analysis_id %in% annot$analysis_id, 'RQC', qc_type))
       mexp_local
     }
   }
@@ -155,7 +156,7 @@ server <- function(input, output, session) {
                         filter_data = FALSE,
                         cols_page = input$n_cols, rows_page = input$n_rows,
                         point_size = 2, line_width = 1.2,
-                        scaling_factor = 1, font_base_size = 6,
+                        font_base_size = 6,
                         output_pdf = as_pdf,
                         path = temp_file )
 
