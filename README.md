@@ -7,7 +7,7 @@ The online version of this app can be access via https://slinghub.shinyapps.io/R
 
 ## Features
 
--   **Data Upload**: Accepts CSV and TSV files from MRMkit and MH Quant.
+-   **Data Upload**: Accepts CSV for MH Quant and TSV files for MRMkit.
 -   **Plot Layout**: Customizable with user-defined rows and columns.
 -   **Data Annotation**: Interactive tables for data selection and filtering.
 -   **Visualization**: Generate and download detailed plots of response curves.
@@ -17,9 +17,9 @@ The online version of this app can be access via https://slinghub.shinyapps.io/R
 
 This application manages its R package dependencies using renv. To ensure you have all the necessary packages installed in their correct versions, please follow these steps:
 
-install.packages("renv")
+`install.packages("renv")`
 
-renv::restore()
+`renv::restore()`
 
 ## How to Use
 
@@ -32,7 +32,6 @@ renv::restore()
 
 ## Additional Information
 
--   RQCee offers a user-friendly interface for comprehensive MS data analysis, ensuring intuitive data processing and result accessibility.
 -   For further assistance or inquiries, please contact the development team: Shanshan Ji ([lsijish\@nus.edu.sg](mailto:lsijish@nus.edu.sg){.email}) or Bo Burla ([bo.burla\@nus.edu.sg](mailto:bo.burla@nus.edu.sg){.email}).
 
 ------------------------------------------------------------------------
