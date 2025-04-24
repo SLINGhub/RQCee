@@ -1,6 +1,9 @@
 # RQCee: Evaluation of Response Curves from Preprocessed MS Data
 
-Welcome to **RQCee**, a Shiny application crafted for evaluating response curves from preprocessed mass spectrometry (MS) data. This tool enables users to upload data, visualize plots, and efficiently download analysis results.
+Welcome to **RQCee**, a Shiny application for evaluating response curves from preprocessed mass spectrometry (MS) data. This tool enables users to upload data, visualize plots, and  download analysis results.
+
+## Online Version of the App
+The online version of this app can be access via https://slinghub.shinyapps.io/RQCee
 
 ## Features
 
